@@ -61,8 +61,8 @@ export default function ImportTransactionsModal({ isOpen, onClose }: ImportTrans
 
   const importMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      return apiRequest('POST', '/api/transactions/import', undefined, {
-        headers: {},
+      return apiRequest('/api/transactions/import', {
+        method: 'POST',
         body: data
       });
     },
