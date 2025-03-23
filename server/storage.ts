@@ -216,6 +216,39 @@ export class MemStorage implements IStorage {
     this.insights.set(id, newInsight);
     return newInsight;
   }
+
+  // Plaid operations
+  async getPlaidItems(): Promise<PlaidItem[]> {
+    return Array.from(this.plaidItems.values());
+  }
+
+  async getPlaidItem(id: number): Promise<PlaidItem | undefined> {
+    return this.plaidItems.get(id);
+  }
+
+  async getPlaidItemByItemId(itemId: string): Promise<PlaidItem | undefined> {
+    return Array.from(this.plaidItems.values()).find(item => item.itemId === itemId);
+  }
+
+  async createPlaidItem(item: InsertPlaidItem): Promise<PlaidItem> {
+    const id = this.plaidItemId++;
+    const newItem: PlaidItem = { ...item, id, lastUpdated: new Date() };
+    this.plaidItems.set(id, newItem);
+    return newItem;
+  }
+
+  async updatePlaidItem(id: number, updates: Partial<InsertPlaidItem>): Promise<PlaidItem | undefined> {
+    const item = this.plaidItems.get(id);
+    if (!item) return undefined;
+
+    const updatedItem = { ...item, ...updates, lastUpdated: new Date() };
+    this.plaidItems.set(id, updatedItem);
+    return updatedItem;
+  }
+
+  async deletePlaidItem(id: number): Promise<boolean> {
+    return this.plaidItems.delete(id);
+  }
 }
 
 export const storage = new MemStorage();
