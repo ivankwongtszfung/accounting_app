@@ -30,9 +30,11 @@ import { useToast } from '@/hooks/use-toast';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { PlusIcon, CreditCardIcon, WalletIcon, PiggyBankIcon, BarChartIcon, Pencil, Trash2 } from 'lucide-react';
+import { PlusIcon, CreditCardIcon, WalletIcon, PiggyBankIcon, BarChartIcon, Pencil, Trash2, RefreshCw, Building } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { Account } from '@shared/schema';
+import { ConnectBankModal } from '@/components/plaid';
+import { ConnectedAccounts } from '@/components/plaid';
 
 function getAccountIcon(type: string) {
   switch (type.toLowerCase()) {
@@ -100,9 +102,13 @@ export default function Accounts() {
 
   const createAccountMutation = useMutation({
     mutationFn: async (data: FormValues) => {
-      return apiRequest('POST', '/api/accounts', {
-        ...data,
-        balance: parseFloat(data.balance)
+      return apiRequest('/api/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...data,
+          balance: data.balance
+        })
       });
     },
     onSuccess: () => {
@@ -127,9 +133,13 @@ export default function Accounts() {
 
   const updateAccountMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: FormValues }) => {
-      return apiRequest('PUT', `/api/accounts/${id}`, {
-        ...data,
-        balance: parseFloat(data.balance)
+      return apiRequest(`/api/accounts/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...data,
+          balance: data.balance
+        })
       });
     },
     onSuccess: () => {
@@ -155,7 +165,9 @@ export default function Accounts() {
 
   const deleteAccountMutation = useMutation({
     mutationFn: async (id: number) => {
-      return apiRequest('DELETE', `/api/accounts/${id}`);
+      return apiRequest(`/api/accounts/${id}`, {
+        method: 'DELETE'
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/accounts'] });
@@ -222,11 +234,34 @@ export default function Accounts() {
       />
 
       <div className="px-4 pb-8">
-        <div className="flex justify-end mb-6">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex space-x-2">
+            <ConnectBankModal 
+              trigger={
+                <Button className="flex items-center gap-2">
+                  <Building className="h-5 w-5" />
+                  Connect Bank
+                </Button>
+              }
+              onSuccess={() => {
+                queryClient.invalidateQueries({ queryKey: ['/api/accounts'] });
+                toast({
+                  title: 'Bank Connected',
+                  description: 'Your bank account has been successfully connected.',
+                });
+              }}
+            />
+          </div>
           <Button onClick={openAddAccountModal}>
             <PlusIcon className="h-5 w-5 mr-2" />
-            Add Account
+            Add Account Manually
           </Button>
+        </div>
+        
+        <ConnectedAccounts />
+        
+        <div className="mt-8 mb-4">
+          <h3 className="text-lg font-medium">All Accounts</h3>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
