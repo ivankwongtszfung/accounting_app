@@ -6,7 +6,9 @@ import {
   Category, 
   InsertCategory, 
   Insight, 
-  InsertInsight 
+  InsertInsight,
+  PlaidItem,
+  InsertPlaidItem
 } from "@shared/schema";
 
 // Interface for storage operations
@@ -34,6 +36,14 @@ export interface IStorage {
   // Insight operations
   getInsights(): Promise<Insight[]>;
   createInsight(insight: InsertInsight): Promise<Insight>;
+  
+  // Plaid operations
+  getPlaidItems(): Promise<PlaidItem[]>;
+  getPlaidItem(id: number): Promise<PlaidItem | undefined>;
+  getPlaidItemByItemId(itemId: string): Promise<PlaidItem | undefined>;
+  createPlaidItem(item: InsertPlaidItem): Promise<PlaidItem>;
+  updatePlaidItem(id: number, updates: Partial<InsertPlaidItem>): Promise<PlaidItem | undefined>;
+  deletePlaidItem(id: number): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -41,17 +51,20 @@ export class MemStorage implements IStorage {
   private transactions: Map<number, Transaction>;
   private categories: Map<number, Category>;
   private insights: Map<number, Insight>;
+  private plaidItems: Map<number, PlaidItem>;
   
   private accountId: number = 1;
   private transactionId: number = 1;
   private categoryId: number = 1;
   private insightId: number = 1;
+  private plaidItemId: number = 1;
 
   constructor() {
     this.accounts = new Map();
     this.transactions = new Map();
     this.categories = new Map();
     this.insights = new Map();
+    this.plaidItems = new Map();
 
     // Initialize with default categories
     this.initializeCategories();

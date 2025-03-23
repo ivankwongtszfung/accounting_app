@@ -1,6 +1,26 @@
-import { pgTable, text, serial, numeric, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, numeric, timestamp, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// Plaid Items table - represents a connection to a financial institution
+export const plaidItems = pgTable("plaid_items", {
+  id: serial("id").primaryKey(),
+  itemId: text("item_id").notNull().unique(),
+  accessToken: text("access_token").notNull(),
+  institution: text("institution").notNull(),
+  institutionId: text("institution_id"),
+  status: text("status").notNull().default("active"),
+  consentExpiresAt: timestamp("consent_expires_at"),
+  lastUpdated: timestamp("last_updated").notNull().defaultNow(),
+});
+
+export const insertPlaidItemSchema = createInsertSchema(plaidItems).omit({
+  id: true,
+  lastUpdated: true,
+});
+
+export type InsertPlaidItem = z.infer<typeof insertPlaidItemSchema>;
+export type PlaidItem = typeof plaidItems.$inferSelect;
 
 export const accounts = pgTable("accounts", {
   id: serial("id").primaryKey(),
@@ -10,6 +30,10 @@ export const accounts = pgTable("accounts", {
   balance: numeric("balance").notNull(),
   accountNumber: text("account_number").notNull(),
   lastUpdated: timestamp("last_updated").notNull().defaultNow(),
+  // Plaid-specific fields
+  plaidItemId: integer("plaid_item_id"),
+  plaidAccountId: text("plaid_account_id"),
+  isPlaidConnected: boolean("is_plaid_connected").default(false),
 });
 
 export const insertAccountSchema = createInsertSchema(accounts).omit({
@@ -27,6 +51,13 @@ export const transactions = pgTable("transactions", {
   amount: numeric("amount").notNull(),
   category: text("category").notNull(),
   merchant: text("merchant").notNull(),
+  // Plaid-specific fields
+  plaidTransactionId: text("plaid_transaction_id"),
+  pending: boolean("pending").default(false),
+  pendingTransactionId: text("pending_transaction_id"),
+  transactionType: text("transaction_type"),
+  paymentChannel: text("payment_channel"),
+  isPlaidTransaction: boolean("is_plaid_transaction").default(false),
 });
 
 export const insertTransactionSchema = createInsertSchema(transactions).omit({
