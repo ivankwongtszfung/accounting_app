@@ -1,10 +1,184 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertAccountSchema, insertTransactionSchema, insertCategorySchema, insertInsightSchema } from "@shared/schema";
+import { insertAccountSchema, insertTransactionSchema, insertCategorySchema, insertInsightSchema, insertPlaidItemSchema } from "@shared/schema";
 import multer from "multer";
 import { Readable } from "stream";
 import { parse } from "csv-parse";
+import { createLinkToken, exchangePublicToken, fetchAccounts, fetchTransactions } from "./plaid";
+
+// Helper function to categorize transactions based on description
+function categorizeTransaction(description: string): string {
+  const lowerDesc = description.toLowerCase();
+  
+  // Dining/Restaurants
+  if (lowerDesc.includes('restaurant') || lowerDesc.includes('cafe') || 
+      lowerDesc.includes('diner') || lowerDesc.includes('pizza') || 
+      lowerDesc.includes('burger') || lowerDesc.includes('food') || 
+      lowerDesc.includes('grubhub') || lowerDesc.includes('doordash') || 
+      lowerDesc.includes('ubereats')) {
+    return 'Dining';
+  }
+  
+  // Transportation
+  if (lowerDesc.includes('uber') || lowerDesc.includes('lyft') || 
+      lowerDesc.includes('taxi') || lowerDesc.includes('metro') || 
+      lowerDesc.includes('transit') || lowerDesc.includes('gas') || 
+      lowerDesc.includes('parking') || lowerDesc.includes('toll')) {
+    return 'Transportation';
+  }
+  
+  // Shopping
+  if (lowerDesc.includes('amazon') || lowerDesc.includes('walmart') || 
+      lowerDesc.includes('target') || lowerDesc.includes('bestbuy') || 
+      lowerDesc.includes('shop') || lowerDesc.includes('store') || 
+      lowerDesc.includes('apple') || lowerDesc.includes('clothing') || 
+      lowerDesc.includes('purchase')) {
+    return 'Shopping';
+  }
+  
+  // Entertainment
+  if (lowerDesc.includes('movie') || lowerDesc.includes('netflix') || 
+      lowerDesc.includes('hulu') || lowerDesc.includes('spotify') || 
+      lowerDesc.includes('disney') || lowerDesc.includes('ticket') || 
+      lowerDesc.includes('concert') || lowerDesc.includes('event')) {
+    return 'Entertainment';
+  }
+  
+  // Groceries
+  if (lowerDesc.includes('grocery') || lowerDesc.includes('market') || 
+      lowerDesc.includes('wholefoods') || lowerDesc.includes('safeway') || 
+      lowerDesc.includes('kroger') || lowerDesc.includes('trader') || 
+      lowerDesc.includes('food') || lowerDesc.includes('mart')) {
+    return 'Groceries';
+  }
+  
+  // Utilities
+  if (lowerDesc.includes('utility') || lowerDesc.includes('electric') || 
+      lowerDesc.includes('water') || lowerDesc.includes('gas') || 
+      lowerDesc.includes('internet') || lowerDesc.includes('phone') || 
+      lowerDesc.includes('bill') || lowerDesc.includes('cable')) {
+    return 'Utilities';
+  }
+  
+  // Housing
+  if (lowerDesc.includes('rent') || lowerDesc.includes('mortgage') || 
+      lowerDesc.includes('hoa') || lowerDesc.includes('housing') || 
+      lowerDesc.includes('maintenance')) {
+    return 'Housing';
+  }
+  
+  // Health
+  if (lowerDesc.includes('doctor') || lowerDesc.includes('medical') || 
+      lowerDesc.includes('pharmacy') || lowerDesc.includes('health') || 
+      lowerDesc.includes('fitness') || lowerDesc.includes('gym') || 
+      lowerDesc.includes('wellness')) {
+    return 'Health';
+  }
+  
+  // Income
+  if (lowerDesc.includes('payroll') || lowerDesc.includes('deposit') || 
+      lowerDesc.includes('salary') || lowerDesc.includes('income') || 
+      lowerDesc.includes('direct dep') || lowerDesc.includes('payment from')) {
+    return 'Income';
+  }
+  
+  return 'Other';
+}
+
+// Process Plaid transactions and store them in the database
+async function syncTransactions(accessToken: string, startDate: string, endDate: string, plaidItemId: number) {
+  try {
+    // Get all accounts for this Plaid item
+    const accounts = await storage.getAccounts();
+    const plaidAccounts = accounts.filter(acc => acc.plaidItemId === plaidItemId);
+    
+    if (plaidAccounts.length === 0) {
+      throw new Error('No accounts found for this Plaid item');
+    }
+    
+    // Create a map of Plaid account IDs to our account IDs
+    const accountMap = new Map();
+    plaidAccounts.forEach(acc => {
+      if (acc.plaidAccountId) {
+        accountMap.set(acc.plaidAccountId, acc.id);
+      }
+    });
+    
+    // Fetch transactions from Plaid
+    const plaidTransactions = await fetchTransactions(accessToken, startDate, endDate);
+    
+    // Process transactions
+    const transactions = plaidTransactions.map(pt => {
+      const accountId = accountMap.get(pt.account_id);
+      
+      if (!accountId) {
+        console.warn(`No matching account found for Plaid account ID: ${pt.account_id}`);
+        return null;
+      }
+      
+      // Determine if it's income or expense by the amount
+      let amount = pt.amount.toString();
+      if (pt.amount < 0) {
+        amount = (pt.amount * -1).toString(); // Make positive but keep as expense
+      } else {
+        amount = (-1 * pt.amount).toString(); // Make negative (income)
+      }
+      
+      // Extract merchant name
+      const merchant = pt.merchant_name || pt.name.split(' ')[0];
+      
+      // Categorize the transaction
+      const category = pt.category ? pt.category[0] : categorizeTransaction(pt.name);
+      
+      return {
+        accountId,
+        date: new Date(pt.date),
+        description: pt.name,
+        amount,
+        category,
+        merchant,
+        plaidTransactionId: pt.transaction_id,
+        pending: pt.pending,
+        pendingTransactionId: pt.pending_transaction_id,
+        transactionType: pt.transaction_type,
+        paymentChannel: pt.payment_channel,
+        isPlaidTransaction: true
+      };
+    }).filter(t => t !== null);
+    
+    if (transactions.length === 0) {
+      return { count: 0 };
+    }
+    
+    // Check for existing transactions to avoid duplicates
+    const existingTransactions = await storage.getTransactions();
+    const existingPlaidTransactionIds = new Set();
+    
+    existingTransactions.forEach(et => {
+      if (et.plaidTransactionId) {
+        existingPlaidTransactionIds.add(et.plaidTransactionId);
+      }
+    });
+    
+    // Filter out transactions that we already have
+    const newTransactions = transactions.filter(t => 
+      t && t.plaidTransactionId && !existingPlaidTransactionIds.has(t.plaidTransactionId)
+    );
+    
+    if (newTransactions.length === 0) {
+      return { count: 0 };
+    }
+    
+    // Save new transactions to database
+    const savedTransactions = await storage.createTransactions(newTransactions);
+    
+    return { count: savedTransactions.length };
+  } catch (error) {
+    console.error('Error syncing transactions:', error);
+    throw error;
+  }
+}
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -270,6 +444,172 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(insight);
     } catch (error) {
       res.status(500).json({ message: "Failed to create insight" });
+    }
+  });
+
+  // Plaid routes
+  app.get("/api/plaid/create-link-token", async (req: Request, res: Response) => {
+    try {
+      // Generate a unique user ID or use from session
+      const userId = "user-" + Date.now();
+      const linkTokenResponse = await createLinkToken(userId);
+      res.json({ 
+        linkToken: linkTokenResponse.link_token 
+      });
+    } catch (error) {
+      console.error("Create link token error:", error);
+      res.status(500).json({ message: "Failed to create link token" });
+    }
+  });
+
+  app.post("/api/plaid/exchange-token", async (req: Request, res: Response) => {
+    try {
+      const { publicToken } = req.body;
+      
+      if (!publicToken) {
+        return res.status(400).json({ message: "Missing public token" });
+      }
+      
+      // Exchange public token for access token
+      const { accessToken, itemId } = await exchangePublicToken(publicToken);
+      
+      // Get institution information
+      const institutionId = "unknown"; // In real app, get this from Plaid
+      const institution = "Connected Bank"; // In real app, get this from Plaid
+      
+      // Create Plaid item record
+      const plaidItem = await storage.createPlaidItem({
+        institution,
+        itemId,
+        accessToken,
+        status: "active",
+        institutionId: institutionId,
+        lastUpdated: new Date()
+      });
+      
+      // Get accounts from Plaid
+      const plaidAccounts = await fetchAccounts(accessToken);
+      
+      // Create accounts in local storage
+      for (const account of plaidAccounts) {
+        await storage.createAccount({
+          name: account.name,
+          type: account.type,
+          institution,
+          balance: account.balances.current?.toString() || "0",
+          accountNumber: account.mask || "xxxx",
+          plaidItemId: plaidItem.id,
+          plaidAccountId: account.account_id,
+          isPlaidConnected: true,
+          lastUpdated: new Date()
+        });
+      }
+      
+      // Sync transactions
+      const now = new Date();
+      const startDate = new Date(now);
+      startDate.setFullYear(startDate.getFullYear() - 1); // Get 1 year of transactions
+      
+      const formattedStartDate = startDate.toISOString().split('T')[0];
+      const formattedEndDate = now.toISOString().split('T')[0];
+      
+      await syncTransactions(accessToken, formattedStartDate, formattedEndDate, plaidItem.id);
+      
+      res.json({ 
+        success: true,
+        message: "Bank connected successfully" 
+      });
+    } catch (error) {
+      console.error("Exchange token error:", error);
+      res.status(500).json({ message: "Failed to exchange token" });
+    }
+  });
+
+  app.post("/api/plaid/sync-account/:id", async (req: Request, res: Response) => {
+    try {
+      const accountId = parseInt(req.params.id);
+      const account = await storage.getAccount(accountId);
+      
+      if (!account) {
+        return res.status(404).json({ message: "Account not found" });
+      }
+      
+      if (!account.isPlaidConnected || !account.plaidItemId) {
+        return res.status(400).json({ message: "Account is not connected to Plaid" });
+      }
+      
+      const plaidItem = await storage.getPlaidItem(account.plaidItemId);
+      
+      if (!plaidItem) {
+        return res.status(404).json({ message: "Plaid connection not found" });
+      }
+      
+      // Sync transactions
+      const now = new Date();
+      const startDate = new Date(now);
+      startDate.setMonth(startDate.getMonth() - 3); // Get 3 months of transactions
+      
+      const formattedStartDate = startDate.toISOString().split('T')[0];
+      const formattedEndDate = now.toISOString().split('T')[0];
+      
+      await syncTransactions(plaidItem.accessToken, formattedStartDate, formattedEndDate, plaidItem.id);
+      
+      // Update account last updated timestamp
+      await storage.updateAccount(accountId, { lastUpdated: new Date() });
+      
+      res.json({ 
+        success: true, 
+        message: "Account synced successfully" 
+      });
+    } catch (error) {
+      console.error("Sync account error:", error);
+      res.status(500).json({ message: "Failed to sync account" });
+    }
+  });
+
+  app.post("/api/plaid/disconnect-account/:id", async (req: Request, res: Response) => {
+    try {
+      const accountId = parseInt(req.params.id);
+      const account = await storage.getAccount(accountId);
+      
+      if (!account) {
+        return res.status(404).json({ message: "Account not found" });
+      }
+      
+      if (!account.isPlaidConnected || !account.plaidItemId) {
+        return res.status(400).json({ message: "Account is not connected to Plaid" });
+      }
+      
+      // Get Plaid item
+      const plaidItem = await storage.getPlaidItem(account.plaidItemId);
+      
+      if (!plaidItem) {
+        return res.status(404).json({ message: "Plaid connection not found" });
+      }
+      
+      // Get all accounts with the same Plaid item ID
+      const accounts = await storage.getAccounts();
+      const relatedAccounts = accounts.filter(a => a.plaidItemId === account.plaidItemId);
+      
+      if (relatedAccounts.length === 1) {
+        // This is the only account using this Plaid item, so delete the item
+        await storage.deletePlaidItem(plaidItem.id);
+      }
+      
+      // Update account to disconnect from Plaid
+      await storage.updateAccount(accountId, {
+        isPlaidConnected: false,
+        plaidItemId: null,
+        plaidAccountId: null
+      });
+      
+      res.json({ 
+        success: true, 
+        message: "Account disconnected successfully" 
+      });
+    } catch (error) {
+      console.error("Disconnect account error:", error);
+      res.status(500).json({ message: "Failed to disconnect account" });
     }
   });
 

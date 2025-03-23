@@ -23,7 +23,7 @@ const PlaidLinkContainer = ({
   const [linkToken, setLinkToken] = useState<string | null>(null);
   
   // Fetch link token
-  const { data: linkTokenData, isLoading, error, refetch } = useQuery({
+  const { data: linkTokenData, isLoading, error, refetch } = useQuery<{linkToken: string}>({
     queryKey: ['/api/plaid/create-link-token'],
     retry: 1,
     staleTime: 1000 * 60 * 5, // 5 minutes
