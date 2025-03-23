@@ -371,9 +371,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           accountId,
           date: new Date(record.date),
           description: record.description,
-          amount: parseFloat(record.amount),
+          amount: String(parseFloat(record.amount)),
           category: record.category || 'Other',
-          merchant: record.merchant || record.description.split(' ')[0]
+          merchant: record.merchant || record.description.split(' ')[0],
+          plaidTransactionId: null,
+          pending: null,
+          pendingTransactionId: null,
+          transactionType: null,
+          paymentChannel: null,
+          isPlaidTransaction: null
         };
       });
 
@@ -484,7 +490,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         accessToken,
         status: "active",
         institutionId: institutionId,
-        lastUpdated: new Date()
+        consentExpiresAt: null
       });
       
       // Get accounts from Plaid

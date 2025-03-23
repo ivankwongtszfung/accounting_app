@@ -133,7 +133,14 @@ export class MemStorage implements IStorage {
 
   async createAccount(account: InsertAccount): Promise<Account> {
     const id = this.accountId++;
-    const newAccount: Account = { ...account, id, lastUpdated: new Date() };
+    const newAccount: Account = { 
+      ...account, 
+      id, 
+      lastUpdated: new Date(),
+      plaidItemId: account.plaidItemId || null,
+      plaidAccountId: account.plaidAccountId || null,
+      isPlaidConnected: account.isPlaidConnected || null
+    };
     this.accounts.set(id, newAccount);
     return newAccount;
   }
@@ -171,7 +178,16 @@ export class MemStorage implements IStorage {
 
   async createTransaction(transaction: InsertTransaction): Promise<Transaction> {
     const id = this.transactionId++;
-    const newTransaction: Transaction = { ...transaction, id };
+    const newTransaction: Transaction = { 
+      ...transaction, 
+      id,
+      plaidTransactionId: transaction.plaidTransactionId || null,
+      pending: transaction.pending || null,
+      pendingTransactionId: transaction.pendingTransactionId || null,
+      transactionType: transaction.transactionType || null,
+      paymentChannel: transaction.paymentChannel || null,
+      isPlaidTransaction: transaction.isPlaidTransaction || null
+    };
     this.transactions.set(id, newTransaction);
     return newTransaction;
   }
