@@ -97,21 +97,21 @@ export class MemStorage implements IStorage {
       {
         title: "Subscription Overlap Detected",
         description: "You have multiple streaming subscriptions (Netflix, Hulu, Disney+). Consider consolidating to save $14/month.",
-        savingsAmount: 14.00,
+        savingsAmount: "14.00",
         type: "subscription",
         actionLink: "/insights/subscriptions",
       },
       {
         title: "High-Yield Savings Opportunity",
         description: "Moving your savings to an online bank could earn you an extra $420/year in interest.",
-        savingsAmount: 420.00,
+        savingsAmount: "420.00",
         type: "high-yield",
         actionLink: "/insights/savings",
       },
       {
         title: "Dining Out Spending Increased",
         description: "Your restaurant spending is up 24% from last month. Setting a budget could save you $150/month.",
-        savingsAmount: 150.00,
+        savingsAmount: "150.00",
         type: "spending-alert",
         actionLink: "/budgets/new",
       }
@@ -254,14 +254,14 @@ export class MemStorage implements IStorage {
 
   async createPlaidItem(item: InsertPlaidItem): Promise<PlaidItem> {
     const id = this.plaidItemId++;
-    const newItem: PlaidItem = { 
+    const newItem = { 
       ...item, 
       id, 
       lastUpdated: new Date(),
       status: item.status || "active",
       institutionId: item.institutionId || null,
       consentExpiresAt: item.consentExpiresAt || null
-    };
+    } as PlaidItem;
     this.plaidItems.set(id, newItem);
     return newItem;
   }
