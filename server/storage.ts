@@ -228,7 +228,13 @@ export class MemStorage implements IStorage {
 
   async createInsight(insight: InsertInsight): Promise<Insight> {
     const id = this.insightId++;
-    const newInsight: Insight = { ...insight, id, createdAt: new Date() };
+    const newInsight: Insight = { 
+      ...insight, 
+      id, 
+      createdAt: new Date(),
+      savingsAmount: insight.savingsAmount || null,
+      actionLink: insight.actionLink || null
+    };
     this.insights.set(id, newInsight);
     return newInsight;
   }
@@ -248,7 +254,14 @@ export class MemStorage implements IStorage {
 
   async createPlaidItem(item: InsertPlaidItem): Promise<PlaidItem> {
     const id = this.plaidItemId++;
-    const newItem: PlaidItem = { ...item, id, lastUpdated: new Date() };
+    const newItem: PlaidItem = { 
+      ...item, 
+      id, 
+      lastUpdated: new Date(),
+      status: item.status || "active",
+      institutionId: item.institutionId || null,
+      consentExpiresAt: item.consentExpiresAt || null
+    };
     this.plaidItems.set(id, newItem);
     return newItem;
   }

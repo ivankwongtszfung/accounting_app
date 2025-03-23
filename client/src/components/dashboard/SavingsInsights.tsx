@@ -60,8 +60,8 @@ export default function SavingsInsights() {
     <Card className="p-4">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-semibold font-inter">Savings Insights</h3>
-        <Link href="/insights">
-          <a className="text-secondary hover:text-secondary-light text-sm font-medium">View All</a>
+        <Link href="/insights" className="text-secondary hover:text-secondary-light text-sm font-medium">
+          View All
         </Link>
       </div>
       
@@ -90,11 +90,12 @@ export default function SavingsInsights() {
                 <div className="ml-3">
                   <h4 className="text-sm font-medium text-text">{insight.title}</h4>
                   <p className="mt-1 text-xs text-text-light">{insight.description}</p>
-                  <Link href={insight.actionLink || '/insights'}>
-                    <a className="mt-2 inline-block text-xs font-medium text-secondary hover:text-secondary-light">
-                      {insight.type === 'subscription' ? 'Show Details' : 
-                        insight.type === 'high-yield' ? 'Learn More' : 'Create Budget'}
-                    </a>
+                  <Link 
+                    href={insight.actionLink || '/insights'} 
+                    className="mt-2 inline-block text-xs font-medium text-secondary hover:text-secondary-light"
+                  >
+                    {insight.type === 'subscription' ? 'Show Details' : 
+                      insight.type === 'high-yield' ? 'Learn More' : 'Create Budget'}
                   </Link>
                 </div>
               </div>

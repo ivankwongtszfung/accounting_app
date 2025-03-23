@@ -82,8 +82,8 @@ export default function RecentTransactions() {
     <Card className="p-4">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-semibold font-inter">Recent Transactions</h3>
-        <Link href="/transactions">
-          <a className="text-secondary hover:text-secondary-light text-sm font-medium">View All</a>
+        <Link href="/transactions" className="text-secondary hover:text-secondary-light text-sm font-medium">
+          View All
         </Link>
       </div>
       
