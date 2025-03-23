@@ -134,7 +134,7 @@ export default function ImportTransactionsModal({ isOpen, onClose }: ImportTrans
                           </SelectItem>
                         ))
                       ) : (
-                        <SelectItem value="" disabled>
+                        <SelectItem value="no-accounts" disabled>
                           No accounts available
                         </SelectItem>
                       )}
